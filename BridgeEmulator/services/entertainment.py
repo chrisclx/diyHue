@@ -274,13 +274,27 @@ def entertainmentService(group, user):
                         wled_udpmode = 4 #DNRGB mode
                         wled_secstowait = 2
                         for ip in wledLights.keys():
-                            for segments in wledLights[ip]:
+                            # Combine all segments into one UDP packet per device
+                            led_colors = {}
+                            udp_port = 21324
+                            for seg_id in wledLights[ip]:
+                                seg = wledLights[ip][seg_id]
+                                udp_port = seg["udp_port"]
+                                start = seg["start"]
+                                for i in range(int(seg["ledCount"])):
+                                    led_colors[start + i] = seg["color"]
+                            if led_colors:
+                                min_led = min(led_colors.keys())
+                                max_led = max(led_colors.keys())
                                 udphead = bytes([wled_udpmode, wled_secstowait])
-                                start_seg = wledLights[ip][segments]["start"].to_bytes(2,"big")
-                                color = bytes(wledLights[ip][segments]["color"] * int(wledLights[ip][segments]["ledCount"]))
-                                udpdata = udphead+start_seg+color
+                                start_bytes = min_led.to_bytes(2, "big")
+                                color_data = bytearray()
+                                for led in range(min_led, max_led + 1):
+                                    c = led_colors.get(led, [0, 0, 0])
+                                    color_data.extend(c)
+                                udpdata = udphead + start_bytes + bytes(color_data)
                                 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                                sock.sendto(udpdata, (ip.split(":")[0], wledLights[ip][segments]["udp_port"]))
+                                sock.sendto(udpdata, (ip.split(":")[0], udp_port))
                     if len(hueGroupLights) != 0:
                         h.send(hueGroupLights, hueGroup)
                     if len(non_UDP_lights) != 0:
